@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <title>Voetbal Toto Poule</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h1, h2 { color: #333; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    th { background: #eee; }
+    button { padding: 8px 12px; margin: 10px 0; }
+  </style>
+</head>
+<body>
+  <h1>Voetbal Toto Poule</h1>
+  <div id="app"></div>
+
+  <script>
+    // ---- CONFIG ----
+    const SHEET_ID = "VUL_HIER_JE_SHEET_ID_IN";
+    const API_KEY = "VUL_HIER_JE_API_KEY_IN";
+
+    const players = [
+      "Bertil","Reint","Henk-Jan","Jessica","Jan-Willem",
+      "Timmy","Mike","Willem","Jeroen","Roan","Bjorn"
+    ];
+
+    const matches = [
+      "Ajax - PSV","Feyenoord - AZ","Twente - Utrecht","Vitesse - Groningen",
+      "Heerenveen - Sparta","Fortuna - NEC","Cambuur - Excelsior","ADO - RKC",
+      "Emmen - Volendam","PEC - Willem II","Go Ahead - Heracles","Den Bosch - NAC",
+      "Helmond - MVV","Telstar - TOP Oss","Dordrecht - Eindhoven"
+    ];
+
+    // ---- INIT ----
+    const params = new URLSearchParams(window.location.search);
+    const player = params.get("player");
+    const week = params.get("week") || "1";
+    const isAdmin = params.get("admin") === "true";
+    const app = document.getElementById("app");
+
+    if (isAdmin) {
+      app.innerHTML = `<h2>Admin overzicht (week ${week})</h2>
+      <button onclick="showLinks()">Genereer spelerslinks</button>
+      <div id="links"></div>
+      <button onclick="showOverview()">Toon ingevulde voorspellingen</button>
+      <div id="overview"></div>`;
+    } else if (player) {
+      app.innerHTML = `<h2>Voorspellingen ${player} (week ${week})</h2>
+      <form id="form"></form>
+      <button type="button" onclick="savePredictions()">Opslaan</button>
+      <div id="status"></div>`;
+      renderForm();
+    } else {
+      app.innerHTML = "<p>Gebruik ?player=NAAM&week=1 of ?admin=true</p>";
+    }
+
+    // ---- FUNCTIONS ----
+    function renderForm() {
+      const form = document.getElementById("form");
+      matches.forEach((m,i)=>{
+        form.innerHTML += `
+          <label>${m}</label>
+          <select id="match${i}">
+            <option value="">- Kies -</option>
+            <option value="1">1 (Thuis wint)</option>
+            <option value="2">2 (Uit wint)</option>
+            <option value="3">3 (Gelijkspel)</option>
+          </select><br>`;
+      });
+      loadPredictions();
+    }
+
+    function savePredictions() {
+      const data = [];
+      matches.forEach((m,i)=>{
+        const val = document.getElementById("match"+i).value;
+        data.push([week, player, m, val]);
+      });
+      // API request naar Google Sheets
+      const body = {
+        values: data
+      };
+      fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Predictions:append?valueInputOption=RAW&key=${API_KEY}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      }).then(res => res.json())
+      .then(r => {
+        document.getElementById("status").innerText = "Voorspellingen opgeslagen!";
+      }).catch(err=>{
+        console.error(err);
+        document.getElementById("status").innerText = "Fout bij opslaan!";
+      });
+    }
+
+    function loadPredictions() {
+      // Optioneel: hier kun je predictions ophalen via GET request
+    }
+
+    function showLinks() {
+      let html = "<ul>";
+      players.forEach(p => {
+        const slug = p.toLowerCase().replace(" ","-");
+        html += `<li>${p}: <a href="?player=${slug}&week=${week}">${location.href.split("?")[0]}?player=${slug}&week=${week}</a></li>`;
+      });
+      html += "</ul>";
+      document.getElementById("links").innerHTML = html;
+    }
+
+    function showOverview() {
+      fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Predictions?key=${API_KEY}`)
+      .then(res => res.json())
+      .then(data => {
+        const values = data.values || [];
+        let html = "<table><tr><th>Week</th><th>Speler</th><th>Wedstrijd</th><th>Voorspelling</th></tr>";
+        values.forEach(row => {
+          html += `<tr>${row.map(cell=>`<td>${cell}</td>`).join("")}</tr>`;
+        });
+        html += "</table>";
+        document.getElementById("overview").innerHTML = html;
+      });
+    }
+
+  </script>
+</body>
+</html>
